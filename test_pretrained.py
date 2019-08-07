@@ -44,8 +44,22 @@ if __name__ == "__main__":
     ### load model opts
     opts_filename = os.path.join('pretrained_models', "ECCV18_blind_consistency_opts.pth")
     print("Load %s" %opts_filename)
+
+
+
+    class StrToBytes:
+        def __init__(self, fileobj):
+            self.fileobj = fileobj
+
+        def read(self, size):
+            return self.fileobj.read(size).encode()
+
+        def readline(self, size=-1):
+            return self.fileobj.readline(size).encode()
+
+
     with open(opts_filename, 'r') as f:
-        model_opts = pickle.load(f)
+        model_opts = pickle.load(StrToBytes(f))
 
 
     ### initialize model
