@@ -20,8 +20,9 @@ if __name__ == "__main__":
     ### dataset options
     parser.add_argument('--origin', type=str, default='/svlk/bab5_s01e15_first25/', help='origin')
     parser.add_argument('--input', type=str, default="/svlk/bab5_s01e15_first25_SR/", help='blinked source')
-    parser.add_argument('--output', type=str, default='/svlk/bab5_s01e15_first25_SR_stable/',
-                        help='output')
+    parser.add_argument('--output', type=str, default='/svlk/bab5_s01e15_first25_SR_stable/', help='output')
+    parser.add_argument('--first', type=int, default=1, help='firtst frame number')
+    parser.add_argument('--last', type=int, default=1, help='last frame number')
     ### other options
     parser.add_argument('-gpu', type=int, default=0, help='gpu device id')
 
@@ -56,50 +57,53 @@ if __name__ == "__main__":
     if not os.path.isdir(opts.output):
         os.makedirs(opts.output)
 
-    frame_list = glob.glob(os.path.join(opts.origin, "*.png"))
-    output_list = glob.glob(os.path.join(opts.output, "*.png"))
+    # full_list = glob.glob(sorted(os.path.join(opts.origin, "*.png")))
+    # output_list = glob.glob(os.path.join(opts.output, "*.png"))
+    frames_list = []
+    for f in range(opts.first, opts.last):
+        frames_list.append(f)
 
     ## frame 0
-    frame_p1 = utils.read_img(os.path.join(opts.input, "000001.png"))
-    output_filename = os.path.join(opts.output, "000001.png")
+    frame_p1 = utils.read_img(os.path.join(opts.input, '{:06d}.png'.format(frames_list[0])))
+    output_filename = os.path.join(opts.output, '{:06d}.png'.format(frames_list[0]))
     utils.save_img(frame_p1, output_filename)
 
     lstm_state = None
 
-    for t in range(2, len(frame_list)):
+    for t in range(1, len(frames_list)):
         ### load frames
-        frame_i1 = utils.read_img(os.path.join(opts.origin, "%06d.png" % (t - 1)))
-        frame_i2 = utils.read_img(os.path.join(opts.origin, "%06d.png" % (t)))
-        frame_o1 = utils.read_img(os.path.join(opts.output, "%06d.png" % (t - 1)))
-        frame_p2 = utils.read_img(os.path.join(opts.input, "%06d.png" % (t)))
+        frame_origin_1 = utils.read_img(os.path.join(opts.origin, '{:06d}.png'.format(frames_list[t-1])))
+        frame_origin_2 = utils.read_img(os.path.join(opts.origin, '{:06d}.png'.format(frames_list[t])))
+        frame_output_1 = utils.read_img(os.path.join(opts.output, '{:06d}.png'.format(frames_list[t-1])))
+        frame_input_2 = utils.read_img(os.path.join(opts.input, '{:06d}.png'.format(frames_list[t])))
 
         ### resize image
-        H_orig = frame_p2.shape[0]
-        W_orig = frame_p2.shape[1]
+        H_orig = frame_input_2.shape[0]
+        W_orig = frame_input_2.shape[1]
 
         H_sc = int(math.ceil(float(H_orig) / opts.size_multiplier) * opts.size_multiplier)
         W_sc = int(math.ceil(float(W_orig) / opts.size_multiplier) * opts.size_multiplier)
 
-        frame_i1 = cv2.resize(frame_i1, (W_sc, H_sc))
-        frame_i2 = cv2.resize(frame_i2, (W_sc, H_sc))
-        frame_o1 = cv2.resize(frame_o1, (W_sc, H_sc))
-        frame_p2 = cv2.resize(frame_p2, (W_sc, H_sc))
+        frame_origin_1 = cv2.resize(frame_origin_1, (W_sc, H_sc))
+        frame_origin_2 = cv2.resize(frame_origin_2, (W_sc, H_sc))
+        frame_output_1 = cv2.resize(frame_output_1, (W_sc, H_sc))
+        frame_input_2 = cv2.resize(frame_input_2, (W_sc, H_sc))
 
         with torch.no_grad():
             ### convert to tensor
-            frame_i1 = utils.img2tensor(frame_i1).to(device)
-            frame_i2 = utils.img2tensor(frame_i2).to(device)
-            frame_o1 = utils.img2tensor(frame_o1).to(device)
-            frame_p2 = utils.img2tensor(frame_p2).to(device)
+            frame_origin_1 = utils.img2tensor(frame_origin_1).to(device)
+            frame_origin_2 = utils.img2tensor(frame_origin_2).to(device)
+            frame_output_1 = utils.img2tensor(frame_output_1).to(device)
+            frame_input_2 = utils.img2tensor(frame_input_2).to(device)
 
             ### model input
-            inputs = torch.cat((frame_p2, frame_o1, frame_i2, frame_i1), dim=1)
+            inputs = torch.cat((frame_input_2, frame_output_1, frame_origin_2, frame_origin_1), dim=1)
 
             ### forward
             ts = time.time()
 
             output, lstm_state = model(inputs, lstm_state)
-            frame_o2 = frame_p2 + output
+            frame_o2 = frame_input_2 + output
 
             te = time.time()
             times.append(te - ts)
@@ -114,7 +118,7 @@ if __name__ == "__main__":
         frame_o2 = cv2.resize(frame_o2, (W_orig, H_orig))
 
         ### save output frame
-        output_filename = os.path.join(opts.output, '%06d.png' % (t))
+        output_filename = os.path.join(opts.output, '{:06d}.png'.format(frames_list[t]))
         utils.save_img(frame_o2, output_filename)
 
     ## end of frame
