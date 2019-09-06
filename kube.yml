@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: consistency-3-4
+spec:
+  backoffLimit: 0
+  parallelism: 1
+  template:
+    spec:
+      imagePullSecrets:
+        - name: vgregcred
+      restartPolicy: Never
+      containers:
+        - image: r.c.videogorillas.com/video_consistency:3
+          imagePullPolicy: Always
+          name: colorize
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+            - mountPath: /svlk
+              name: svlk-volume
+            - mountPath: /storage
+              name: storage-volume
+          env:
+          command:
+            - python
+            - "runFolder.py"
+            - "--input"
+            - "/svlk/abush/colorize/out_colorized"
+            - "--output"
+            - "/svlk/abush/colorize/out_consistent/"
+            - "--origin"
+            - "/svlk/abush/colorize/png/"
+            - "--first"
+            - "1400"
+            - "--last"
+            - "1492"
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+
+      nodeSelector:
+#        feature.node.kubernetes.io/gfd-nvidia-model: Quadro-P6000
+        feature.node.kubernetes.io/gfd-nvidia-model: GeForce-GTX-1070
+#        feature.node.videogorillas.com/storage-speed: "10" #10gbe or direct access
+
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+
+        - name: svlk-volume
+          hostPath:
+            # directory location on host
+            path: /svlk
+            # this field is optional
+            type: Directory
+
+        - name: storage-volume
+          hostPath:
+            # directory location on host
+            path: /storage
+            # this field is optional
+            type: Directory
